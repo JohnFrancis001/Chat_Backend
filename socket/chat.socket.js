@@ -1,86 +1,125 @@
-// const Chat = require("../models/chat");
-// const Conversation = require("../models/conversationSchema");
+    const Chat = require("../models/chat");
+    const Conversation = require("../models/conversationSchema");
 
-// const registerChatHandler = (io, socket) => {
+    const registerChatHandler = (io, socket) => {
 
-//     // join room
-//     socket.on("join_room", (conversationId) => {
-//         socket.join(conversationId);
-//     });
+        console.log("User connected:", socket.user.id);
 
-//     // send message
-//     socket.on("send_message", async ({ conversationId, message }) => {
-//         try {
-//             // 1. save message in DB
-//             const newMessage = await Chat.create({
-//                 conversationId,
-//                 sender: senderId,
-//                 message
-//             });
+        // =========================
+        // JOIN CONVERSATION ROOM
+        // =========================
+        socket.on("join_room", async (conversationId, callback) => {
+    try {
+        if (!conversationId) {
+            return callback?.({ success: false, message: "conversationId required" });
+        }
 
-//             // 2. update last message in conversation
-//             await Conversation.findByIdAndUpdate(conversationId, {
-//                 lastMessage: newMessage._id
-//             });
+        
+        const convo = await Conversation.findById(conversationId);
+        console.log("Trying to join:", socket.user.id);
+console.log("Members:", convo.members.map(id => id.toString()));
+        
+        if (!convo) {
+            return callback?.({ success: false, message: "Conversation not found" });
+        }
 
-//             // 3. emit to all users in room
-//             io.to(conversationId).emit("receive_message", {
-//                 _id: newMessage._id,
-//                 message: newMessage.message,
-//                 sender: senderId,
-//                 createdAt: newMessage.createdAt
-//             });
+        if (!convo.members.some(id => id.toString() === socket.user.id)) {
+            return callback?.({ success: false, message: "Unauthorized access" });
+        }
 
-//         } catch (err) {
-//             console.error(err);
-//         }
-//     });
-// };
-
-// module.exports = registerChatHandler;
-
-
-
-const Chat = require("../models/chat");
-const Conversation = require("../models/conversationSchema");
-
-const registerChatHandler = (io, socket) => {
-
-    socket.on("join_room", (conversationId) => {
         socket.join(conversationId);
-        console.log(`User ${socket.user.id} joined room ${conversationId}`);
-    });
 
-    socket.on("send_message", async ({ conversationId, message }) => {
-        const senderId = socket.user.id; // ✅ from verified JWT, not client payload
+        console.log(`User ${socket.user.id} joined ${conversationId}`);
 
-        if (!conversationId || !message?.trim()) {
-            return socket.emit("error", { message: "conversationId and message are required" });
-        }
+        // ✅ THIS WAS MISSING
+        callback?.({ success: true });
 
-        try {
-            const newMessage = await Chat.create({
-                conversationId,
-                sender: senderId, // ✅ always a valid ObjectId
-                message: message.trim()
-            });
+    } catch (err) {
+        console.error("join_room error:", err.message);
+        callback?.({ success: false, message: "Failed to join room" });
+    }
+});
 
-            await Conversation.findByIdAndUpdate(conversationId, {
-                lastMessage: newMessage._id
-            });
+        // =========================
+        // SEND MESSAGE
+        // =========================
+        socket.on("send_message", async ({ conversationId, message }) => {
+            const senderId = socket.user.id;
 
-            io.to(conversationId).emit("receive_message", {
-                _id: newMessage._id,
-                message: newMessage.message,
-                sender: senderId,
-                createdAt: newMessage.createdAt
-            });
+            try {
+                // ✅ Validation
+                if (!conversationId || !message?.trim()) {
+                    return socket.emit("chat_error", { message: "conversationId & message required" });
+                }
 
-        } catch (err) {
-            console.error("send_message error:", err.message);
-            socket.emit("error", { message: "Failed to save message" });
-        }
-    });
-};
+                if (message.length > 1000) {
+                    return socket.emit("chat_error", { message: "Message too long" });
+                }
 
-module.exports = registerChatHandler;
+                const convo = await Conversation.findById(conversationId);
+
+                if (!convo) {
+                    return socket.emit("chat_error", { message: "Conversation not found" });
+                }
+
+                // ✅ Authorization again (important)
+                if (!convo.members.some(id => id.toString() === senderId)) {
+                    return socket.emit("chat_error", { message: "Unauthorized" });
+                }
+
+                console.log(conversationId);
+                console.log(convo.members);
+
+                // ✅ Save message
+                const newMessage = await Chat.create({
+                    conversationId,
+                    sender: senderId,
+                    message: message.trim()
+                });
+
+                // ✅ Update last message
+                await Conversation.findByIdAndUpdate(conversationId, {
+                    lastMessage: newMessage._id
+                });
+
+                // ✅ Emit to all in room
+                io.to(conversationId).emit("receive_message", {
+                    _id: newMessage._id,
+                    message: newMessage.message,
+                    sender: senderId,
+                    createdAt: newMessage.createdAt
+                });
+
+                newMessage.save();
+
+            } catch (err) {
+                console.error("send_message error:", err.message);
+                socket.emit("chat_error", { message: "Failed to send message" });
+            }
+        });
+
+        // =========================
+        // TYPING INDICATOR
+        // =========================
+        socket.on("typing", async (conversationId) => {
+            try {
+                if (!conversationId) return;
+
+                socket.to(conversationId).emit("user_typing", {
+                    user: socket.user.id
+                });
+
+            } catch (err) {
+                console.error("typing error:", err.message);
+            }
+        });
+
+        // =========================
+        // DISCONNECT
+        // =========================
+        socket.on("disconnect", () => {
+            console.log("User disconnected:", socket.user.id);
+        });
+    };
+
+    module.exports = registerChatHandler;

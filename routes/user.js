@@ -7,13 +7,12 @@ const auth = require('../middlewares/auth')
 
 route.post('/reg', async (req, res) => {
     try{
-        const {name, password, email} = req.body;
-        if(!name || !password || !email) return res.status(400).json({message: "All fields required"});
-        console.log(name)
+        const {name, email, password} = req.body;
+        if(!name || !email || !password) return res.status(400).json({message: "All fields required"});
         const userSave = await User.create({
             name,
-            password,
-            email
+            email,
+            password
         })
         return res.status(200).json({message: "User Recorded!", userSave});
     }catch(e){

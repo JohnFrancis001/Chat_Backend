@@ -1,50 +1,64 @@
 const { io } = require("socket.io-client");
 
-// Use a JWT token you got from your login endpoint
-const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5ZDdhOTYxNWIxMjY1ZTdmZmYzZjU5MSIsImVtYWlsIjoiaXNzYWNAZ21haWwuY29tIiwiaWF0IjoxNzc1ODI4MjIyLCJleHAiOjE3NzU4MjkxMjJ9.rL_CpQ92W8f0AWR1kCcHc4LqsiQiwEpZbY5s-8sTkGo";
+// -------------------- TOKENS --------------------
+const tokenA = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5ZjRmMmI3NDA3Nzc3NTVjMjUzZDk1ZiIsImVtYWlsIjoiYWRhbUBnbWFpbC5jb20iLCJpYXQiOjE3Nzc2NjA1OTksImV4cCI6MTc3NzY2MTQ5OX0.KJNIDD_JsCOZcAi1ujdA1N4Lei_NMLzgZNO7BDa0_po";
 
-// Replace with a real ObjectId from your conversations collection (via Postman GET /conversations)
-const conversationId = "69d8fb3d4c2f2acca87c8734";
+const tokenB = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5ZjRmMjc0NDA3Nzc3NTVjMjUzZDk1YyIsImVtYWlsIjoicGF1bEBnbWFpbC5jb20iLCJpYXQiOjE3Nzc2NjA2NzAsImV4cCI6MTc3NzY2MTU3MH0.eyg_SWFxw4agXv9Boqejx97Xn5C7QDsBO--ukFGiZF4";
 
-const socket = io("http://localhost:3000", {
-  auth: { token },
-  transports: ["websocket", "polling"]
+const conversationId = "69f4f2b740777755c253d964";
+
+// -------------------- USER A Token --------------------
+const userA = io("http://localhost:3000", {
+  auth: { token: tokenA }
 });
 
-// When connection is successful
-socket.on("connect", () => {
-  console.log("Connected! Socket ID:", socket.id);
+// -------------------- USER B Token--------------------
+const userB = io("http://localhost:3000", {
+  auth: { token: tokenB }
+});
 
-  // Join the room first
-  socket.emit("join_room", conversationId);
-  console.log("Joined room:", conversationId);
+// -------------------- USER A Connection/Joining --------------------
+userA.on("connect", () => {
+  console.log("User A connected");
 
-  // Send message after a short delay to ensure room join is processed
-  setTimeout(() => {
-    socket.emit("send_message", {
-      conversationId,       
-      message: "This is Issac!"
+  userA.emit("join_room", conversationId, (res) => {
+    console.log("User A join response:", res);
+
+    userA.emit("send_message", {
+      conversationId,
+      message: "Hello this is adam",
     });
-    console.log("Message sent to:", conversationId);
-  }, 500);
+  });
 });
 
-// Listen for incoming messages
-socket.on("receive_message", (data) => {
-  console.log("Received message:", data);
+userA.on("receive_message", (data) => {
+  console.log("User A received:", data);
 });
 
-// Server-side error events
-socket.on("error", (err) => {
-  console.error("Server error:", err.message);
+userA.on("connect_error", (err) => {
+  console.log("User A error:", err.message);
 });
 
-// Connection failure (bad token, server down, etc.)
-socket.on("connect_error", (err) => {
-  console.error("Connection error:", err.message);
+// -------------------- USER B Connection/Joining --------------------
+userB.on("connect", () => {
+  console.log("User B connected");
+
+  userB.emit("join_room", conversationId, (res) => {
+    console.log("User B join response:", res);
+
+    setTimeout(() => {
+      userB.emit("send_message", {
+        conversationId,
+        message: "Hey Adam, nice to meet you. i am paul",
+      });
+    }, 1000);
+  });
 });
 
-// Disconnection reason
-socket.on("disconnect", (reason) => {
-  console.warn("Disconnected:", reason);
+userB.on("receive_message", (data) => {
+  console.log("User B received:", data);
+});
+
+userB.on("connect_error", (err) => {
+  console.log("User B error:", err.message);
 });

@@ -7,8 +7,8 @@ const user = require('./routes/user');
 const chat = require('./routes/startSocket');
 const cookieParser = require('cookie-parser');
 
-app.use(express.json());
 app.use(cookieParser());
+app.use(express.json());
 
 app.use('/user', user);
 app.use('/chat', chat);
